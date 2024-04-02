@@ -1,0 +1,39 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// create table to event
+model Event {
+  id              Int     @id @default(autoincrement())
+  title           String
+  start           DateTime
+  end             DateTime
+  description     String?
+  resourceId      Int
+
+  resource        Resource @relation("ResourceToEvent", fields: [resourceId], references: [resourceId])
+
+}
+
+// create table to resource
+// resource can have multiple events, make resourceId and eventId unique and primary key
+
+
+model Resource {
+  resourceId        Int     @id @default(autoincrement())
+  name      String
+  events    Event[]  @relation("ResourceToEvent")
+
+}
+
