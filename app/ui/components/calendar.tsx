@@ -4,7 +4,7 @@ import React, {
   useMemo,
   useState,
   useCallback,
-  useEffect,
+  useLayoutEffect,
 } from 'react';
 import PropTypes from 'prop-types';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -83,6 +83,7 @@ const resourceMap1 = [
 ];
 
 export default function Resource() {
+  console.log('rendering');
   // const { defaultDate, views } = useMemo(
   //   () => ({
   //     defaultDate: new Date(2024, 0, 29),
@@ -116,35 +117,55 @@ export default function Resource() {
 
   const localizer = momentLocalizer(moment);
 
-  const moveEvent = useCallback(
-    async ({ event, start, end }: { event: any; start: any; end: any }) => {
+  const onEventDrop = useCallback(
+    ({ event, start, end }: { event: any; start: any; end: any }) => {
+      console.log('onEventDrop');
       const idx = events.indexOf(event);
       const updatedEvent = { ...event, start, end };
-      await updateEvent(updatedEvent.id, updatedEvent);
+
+      // Optimistically update the UI first
       const nextEvents = [...events];
       nextEvents.splice(idx, 1, updatedEvent);
-
       setEvents(nextEvents);
+      setNewEvent(updatedEvent);
+
+      // Then handle the database update in the background
+      updateEvent(updatedEvent.id, updatedEvent).catch((error) => {
+        // If the update fails, revert the changes in the UI
+        console.error('Failed to update event:', error);
+        nextEvents.splice(idx, 1, event);
+        setEvents(nextEvents);
+        setNewEvent(event);
+      });
     },
     [events],
   );
 
   const resizeEvent = useCallback(
     async ({ event, start, end }: { event: any; start: any; end: any }) => {
-      const nextEvents = await Promise.all(
-        events.map(async (existingEvent) => {
-          let updatedEvent;
-          if (existingEvent.id === event.id) {
-            updatedEvent = { ...existingEvent, start, end };
-            await updateEvent(event.id, updatedEvent);
-            return updatedEvent;
-          } else {
-            return existingEvent;
-          }
-        }),
-      );
+      console.log('resizeEvent', event);
+      let oldEvent: any = {};
+      let updatedEvent: any = { ...event, start, end };
 
-      setEvents(nextEvents);
+      if ('id' in event && event.id) {
+        const nextEvents = events.map((existingEvent) => {
+          return existingEvent.id === event.id ? updatedEvent : existingEvent;
+        });
+
+        setEvents(nextEvents);
+
+        updateEvent(event.id, updatedEvent).catch((error) => {
+          const nextEvents = events.map((existingEvent) => {
+            return existingEvent.id === event.id ? event : existingEvent;
+          });
+
+          setEvents(nextEvents);
+        });
+      } else {
+        const newEvent = { ...event, start, end };
+        adEventToEventsArray(newEvent);
+        setNewEvent(newEvent);
+      }
     },
     [events],
   );
@@ -167,6 +188,7 @@ export default function Resource() {
     adEventToEventsArray(newEvent);
     setNewEvent(newEvent);
     setOpen(() => true);
+    console.log(newEvent);
   };
 
   const onSelectEvent = (event: any) => {
@@ -174,21 +196,26 @@ export default function Resource() {
     const eventValues = { ...event };
     setNewEvent(eventValues);
     setOpen(() => true);
+    console.log(newEvent);
   };
 
   const handleSave = async (e: any) => {
     console.log('handleOk', newEvent);
+    console.log(newEvent && 'id' in newEvent);
+    console.log(newEvent && typeof newEvent.id === 'number');
 
     if (newEvent) {
-      if (typeof newEvent.id === 'number') {
-        await updateEvent(newEvent.id, newEvent);
+      if ('id' in newEvent && typeof newEvent.id === 'number') {
+        const updatedEvent = await updateEvent(newEvent.id, newEvent);
+        setNewEvent(updatedEvent);
       } else if (!newEvent.id) {
         const dbData = {
           ...newEvent,
           start: newEvent.start,
           end: newEvent.end,
         };
-        await createEvent(dbData);
+        const newCreatedEvent = await createEvent(dbData);
+        setNewEvent(newCreatedEvent);
       }
     }
 
@@ -210,6 +237,10 @@ export default function Resource() {
   };
 
   const handleClose = async () => {
+    const newEvents = events.filter((e) =>
+      e.hasOwnProperty('id') && e.id !== null ? true : false,
+    );
+    setEvents(newEvents);
     setOpen(false);
   };
 
@@ -240,12 +271,13 @@ export default function Resource() {
   let allViews = Object.values(Views);
   const [form] = Form.useForm();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    console.log(date);
     const fetchData = async () => {
       console.log('useEffect called');
       // fetch events from backend api
       const eventsResponse = await fetch('/api/events/all');
-      const eventsData = await eventsResponse.json();
+      const eventsData = eventsResponse ? await eventsResponse.json() : {};
       const eventsRows = eventsData.rows || [];
 
       const events = eventsRows.map((item: any) => ({
@@ -276,7 +308,7 @@ export default function Resource() {
     };
 
     fetchData();
-  }, []);
+  }, [date]);
 
   return (
     <Fragment>
@@ -323,7 +355,7 @@ export default function Resource() {
                     const endDate = form.getFieldValue('end');
                     const id = form.getFieldValue('id');
                     resizeEvent({
-                      event: { id: id },
+                      event: newEvent,
                       start: date.toDate(),
                       end: endDate.toDate(),
                     });
@@ -341,7 +373,7 @@ export default function Resource() {
                     const startDate = form.getFieldValue('start');
                     const id = form.getFieldValue('id');
                     resizeEvent({
-                      event: { id: id },
+                      event: newEvent,
                       start: startDate.toDate(),
                       end: date.toDate(),
                     });
@@ -374,7 +406,7 @@ export default function Resource() {
           resizable
           events={events}
           onEventResize={resizeEvent}
-          onEventDrop={moveEvent}
+          onEventDrop={onEventDrop}
           defaultDate={new Date()}
           resources={resourceMap} // your resources array
           resourceIdAccessor={(resource: object) =>

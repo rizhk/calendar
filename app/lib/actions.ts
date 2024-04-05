@@ -4,7 +4,10 @@ import { EventService } from './services';
 import { EventType } from '@/app/lib/definitions';
 
 export const createEvent = async (event: Omit<EventType, 'id'>) => {
-  const newEvent = await EventService.createEvent(event);
+  const newEvent = await EventService.createEvent({
+    ...event,
+    description: event.description || null,
+  });
   return newEvent;
 };
 export const updateEvent = async (

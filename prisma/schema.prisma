@@ -32,7 +32,7 @@ model Event {
 
 model Resource {
   resourceId        Int     @id @default(autoincrement())
-  name      String
+  resourceTitle      String
   events    Event[]  @relation("ResourceToEvent")
 
 }

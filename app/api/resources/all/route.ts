@@ -4,7 +4,7 @@ export function GET(request: Request) {
   const paramQuery: any = {};
   const columnsToFetch: any = {
     resourceId: true,
-    name: true,
+    resourceTitle: true,
   };
   const pageSize: number = 100;
   const currentPage: number = 1;
