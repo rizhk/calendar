@@ -99,6 +99,9 @@ export default function Resource() {
   const [open, setOpen] = useState(false);
   const [newEvent, setNewEvent] = useState<EventType | null>(null);
 
+  let allViews = Object.values(Views);
+  const [form] = Form.useForm();
+
   let initialFormValues: any = {};
 
   const onNavigate = useCallback(
@@ -115,27 +118,65 @@ export default function Resource() {
     [view],
   );
 
+  const overLapped = (event: any, start: string, end: string) => {
+    let eventOverlapped = false;
+    const eventsCheckForOverlap = JSON.parse(JSON.stringify(events));
+    console.log('eventsCheckForOverlap', eventsCheckForOverlap);
+    if (eventsCheckForOverlap.length > 0) {
+      const existingEventId = eventsCheckForOverlap.findIndex(
+        (e: any) => e.id === event.id,
+      );
+      console.log('existingEventId', existingEventId);
+      if (existingEventId >= 0) {
+        eventsCheckForOverlap.splice(existingEventId, 1);
+      }
+    }
+    let movedStart = new Date(start);
+    let movedEnd = new Date(end);
+    for (const value of eventsCheckForOverlap) {
+      let eventStart = new Date(value.start);
+      let eventEnd = new Date(value.end);
+      if (eventStart < movedEnd && eventEnd > movedStart) {
+        console.log('event', value, start, end);
+        eventOverlapped = true;
+        break;
+      }
+    }
+
+    console.log('eventOverlapped', eventOverlapped);
+
+    return eventOverlapped;
+  };
+
   const localizer = momentLocalizer(moment);
 
   const onEventDrop = useCallback(
     ({ event, start, end }: { event: any; start: any; end: any }) => {
-      console.log('onEventDrop');
       const idx = events.indexOf(event);
       const updatedEvent = { ...event, start, end };
+
+      if (overLapped(updatedEvent, start, end)) {
+        form.getFieldsValue({
+          ...event,
+          start: dayjs(event.start),
+          end: dayjs(event.end),
+        });
+        return false;
+      }
 
       // Optimistically update the UI first
       const nextEvents = [...events];
       nextEvents.splice(idx, 1, updatedEvent);
-      setEvents(nextEvents);
-      setNewEvent(updatedEvent);
+      setEvents((oldEvents) => nextEvents);
+      setNewEvent((oldEventValue) => updatedEvent);
 
       // Then handle the database update in the background
       updateEvent(updatedEvent.id, updatedEvent).catch((error) => {
         // If the update fails, revert the changes in the UI
         console.error('Failed to update event:', error);
         nextEvents.splice(idx, 1, event);
-        setEvents(nextEvents);
-        setNewEvent(event);
+        setEvents((oldEvents) => nextEvents);
+        setNewEvent((oldEventValue) => event);
       });
     },
     [events],
@@ -144,6 +185,10 @@ export default function Resource() {
   const resizeEvent = useCallback(
     async ({ event, start, end }: { event: any; start: any; end: any }) => {
       console.log('resizeEvent', event);
+
+      if (overLapped(event, start, end)) {
+        return false;
+      }
       let oldEvent: any = {};
       let updatedEvent: any = { ...event, start, end };
 
@@ -152,20 +197,21 @@ export default function Resource() {
           return existingEvent.id === event.id ? updatedEvent : existingEvent;
         });
 
-        setEvents(nextEvents);
+        setEvents((oldEvents) => nextEvents);
 
         updateEvent(event.id, updatedEvent).catch((error) => {
           const nextEvents = events.map((existingEvent) => {
             return existingEvent.id === event.id ? event : existingEvent;
           });
 
-          setEvents(nextEvents);
+          setEvents((oldEvents) => nextEvents);
         });
       } else {
         const newEvent = { ...event, start, end };
         adEventToEventsArray(newEvent);
-        setNewEvent(newEvent);
+        setNewEvent((oldEventValue) => newEvent);
       }
+      form.getFieldsValue({ ...event, start: dayjs(start), end: dayjs(end) });
     },
     [events],
   );
@@ -173,7 +219,7 @@ export default function Resource() {
   const adEventToEventsArray = (event: EventType) => {
     const nextEvents: EventType[] = [...events];
     nextEvents.splice(nextEvents.length, 0, event);
-    setEvents(nextEvents);
+    setEvents((oldEvents) => nextEvents);
   };
 
   const onSelectSlot = (slotInfo: any) => {
@@ -186,17 +232,35 @@ export default function Resource() {
     };
 
     adEventToEventsArray(newEvent);
-    setNewEvent(newEvent);
+    setNewEvent((oldEventValue) => newEvent);
+    form.setFieldsValue({
+      ...newEvent,
+      start: dayjs(newEvent.start),
+      end: dayjs(newEvent.end),
+    });
     setOpen(() => true);
     console.log(newEvent);
   };
 
   const onSelectEvent = (event: any) => {
-    console.log(event);
-    const eventValues = { ...event };
-    setNewEvent(eventValues);
+    const eventValues = {
+      id: event.id,
+      title: event.title,
+      start: event.start,
+      end: event.end,
+      resourceId: event.resourceId,
+      description: event.description,
+    };
+    console.log(eventValues);
+
+    setNewEvent((oldEventValue) => eventValues);
+    form.setFieldsValue({
+      ...eventValues,
+      start: dayjs(event.start),
+      end: dayjs(event.end),
+    });
+
     setOpen(() => true);
-    console.log(newEvent);
   };
 
   const handleSave = async (e: any) => {
@@ -207,32 +271,46 @@ export default function Resource() {
     if (newEvent) {
       if ('id' in newEvent && typeof newEvent.id === 'number') {
         const updatedEvent = await updateEvent(newEvent.id, newEvent);
-        setNewEvent(updatedEvent);
+        setNewEvent((oldEventValue) => updatedEvent);
       } else if (!newEvent.id) {
         const dbData = {
-          ...newEvent,
+          title: newEvent.title,
           start: newEvent.start,
           end: newEvent.end,
+          resourceId: newEvent.resourceId,
+          description: newEvent.description,
         };
+
         const newCreatedEvent = await createEvent(dbData);
-        setNewEvent(newCreatedEvent);
+        setNewEvent((oldEventValue) => newCreatedEvent);
       }
     }
 
     setOpen(false);
   };
   const handleDelete = async (e: any) => {
-    console.log('handleDelete', e);
-    const newEvents = events.filter((e) =>
-      !newEvent
+    console.log('handleDelete', newEvent);
+    // const newEvents = events.filter((e) =>
+    //   !newEvent
+    //     ? true
+    //     : newEvent.id && e.id && e.id.toString() !== newEvent.id.toString(),
+    // );
+
+    const newEvents = events.filter((e) => {
+      console.log('newEvent.id', newEvent ? newEvent.id : null);
+      console.log(
+        'e.id.toString()',
+        e.id && e.id.toString() ? e.id.toString() : null,
+      );
+      return !newEvent
         ? true
-        : newEvent.id && e.id && e.id.toString() !== newEvent.id.toString(),
-    );
+        : newEvent.id && e.id && e.id.toString() !== newEvent.id.toString();
+    });
 
     if (newEvent && newEvent.id && typeof newEvent.id === 'number') {
       await deleteEvent(newEvent.id);
     }
-    setEvents(newEvents);
+    setEvents((oldevents) => newEvents);
     setOpen(false);
   };
 
@@ -240,7 +318,7 @@ export default function Resource() {
     const newEvents = events.filter((e) =>
       e.hasOwnProperty('id') && e.id !== null ? true : false,
     );
-    setEvents(newEvents);
+    setEvents((oldEvents) => newEvents);
     setOpen(false);
   };
 
@@ -257,6 +335,9 @@ export default function Resource() {
   };
 
   const initialValues = () => {
+    console.log('initialValues ran');
+    console.log('iitialized with', newEvent);
+
     const initialValues = JSON.parse(JSON.stringify(newEvent));
     if (initialValues) {
       initialValues['start'] = newEvent ? dayjs(newEvent.start) : dayjs();
@@ -267,9 +348,6 @@ export default function Resource() {
   };
 
   /* Form ends */
-
-  let allViews = Object.values(Views);
-  const [form] = Form.useForm();
 
   useLayoutEffect(() => {
     console.log(date);
@@ -297,10 +375,10 @@ export default function Resource() {
       }));
 
       if (eventsRows && resourceRows) {
-        setEvents(events);
+        setEvents((oldEvents) => events);
         setResourceMap(resources);
       } else {
-        setEvents([]);
+        setEvents((oldEvents) => []);
         setResourceMap([]);
       }
 
@@ -328,7 +406,7 @@ export default function Resource() {
         <Form
           layout="vertical"
           onFinish={onFinish}
-          initialValues={initialValues()}
+          // initialValues={initialValues()}
           form={form}
         >
           <Row>
