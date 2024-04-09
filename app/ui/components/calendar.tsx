@@ -43,6 +43,7 @@ import {
 } from 'antd';
 
 import type { EventType } from '@/app/lib/definitions';
+import { set } from 'zod';
 
 const eventsJson = [
   {
@@ -121,19 +122,24 @@ export default function Resource() {
   const overLapped = (event: any, start: string, end: string) => {
     let eventOverlapped = false;
     const eventsCheckForOverlap = JSON.parse(JSON.stringify(events));
-    console.log('eventsCheckForOverlap', eventsCheckForOverlap);
-    if (eventsCheckForOverlap.length > 0) {
-      const existingEventId = eventsCheckForOverlap.findIndex(
-        (e: any) => e.id === event.id,
+    const eventsForSameResource = eventsCheckForOverlap.filter(
+      (e: any) => e.resourceId === event.resourceId,
+    );
+    console.log('eventsCheckForOverlap', eventsForSameResource);
+    console.log('event.id', event.id);
+    if (eventsForSameResource.length > 0) {
+      const existingEventKey = eventsForSameResource.findIndex(
+        (e: any) => e.id === event.id && e.resourceId === event.resourceId,
       );
-      console.log('existingEventId', existingEventId);
-      if (existingEventId >= 0) {
-        eventsCheckForOverlap.splice(existingEventId, 1);
+      console.log('existingEventKey', existingEventKey);
+      if (existingEventKey >= 0) {
+        eventsForSameResource.splice(existingEventKey, 1);
       }
     }
+
     let movedStart = new Date(start);
     let movedEnd = new Date(end);
-    for (const value of eventsCheckForOverlap) {
+    for (const value of eventsForSameResource) {
       let eventStart = new Date(value.start);
       let eventEnd = new Date(value.end);
       if (eventStart < movedEnd && eventEnd > movedStart) {
@@ -156,11 +162,7 @@ export default function Resource() {
       const updatedEvent = { ...event, start, end };
 
       if (overLapped(updatedEvent, start, end)) {
-        form.getFieldsValue({
-          ...event,
-          start: dayjs(event.start),
-          end: dayjs(event.end),
-        });
+        setNewEvent((oldEventValue) => event);
         return false;
       }
 
