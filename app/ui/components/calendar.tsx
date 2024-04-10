@@ -22,7 +22,12 @@ import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import dayjs from 'dayjs';
 
 import moment from 'moment';
-import { createEvent, deleteEvent, updateEvent } from '@/app/lib/actions';
+import {
+  createEvent,
+  deleteEvent,
+  updateEvent,
+  getEventData,
+} from '@/app/lib/actions';
 
 const localizer = momentLocalizer(moment);
 
@@ -201,6 +206,12 @@ export default function Resource() {
 
         setEvents((oldEvents) => nextEvents);
 
+        form.setFieldsValue({
+          ...updatedEvent,
+          start: dayjs(updatedEvent.start),
+          end: dayjs(updatedEvent.end),
+        });
+
         updateEvent(event.id, updatedEvent).catch((error) => {
           const nextEvents = events.map((existingEvent) => {
             return existingEvent.id === event.id ? event : existingEvent;
@@ -209,11 +220,22 @@ export default function Resource() {
           setEvents((oldEvents) => nextEvents);
         });
       } else {
+        setEvents((oldEvents) => events.filter((event) => event.id));
         const newEvent = { ...event, start, end };
-        adEventToEventsArray(newEvent);
+        for (const key in events) {
+          if (!events[key].id) {
+            events[key] = newEvent;
+          }
+        }
+        setEvents((oldEvents) => events);
+
         setNewEvent((oldEventValue) => newEvent);
+        form.setFieldsValue({
+          ...newEvent,
+          start: dayjs(newEvent.start),
+          end: dayjs(newEvent.end),
+        });
       }
-      form.getFieldsValue({ ...event, start: dayjs(start), end: dayjs(end) });
     },
     [events],
   );
@@ -232,6 +254,7 @@ export default function Resource() {
       resourceId: slotInfo.resourceId,
       description: '',
     };
+    form.resetFields();
 
     adEventToEventsArray(newEvent);
     setNewEvent((oldEventValue) => newEvent);
@@ -241,21 +264,27 @@ export default function Resource() {
       end: dayjs(newEvent.end),
     });
     setOpen(() => true);
-    console.log(newEvent);
+    console.log('onSelectSlot', newEvent);
   };
 
-  const onSelectEvent = (event: any) => {
+  const onSelectEvent = async (event: any) => {
+    let eventDbData;
+    console.log('onSelectEvent', event);
+
+    if (event && 'id' in event && event.id && typeof event.id === 'number') {
+      eventDbData = await getEventData(event.id);
+    }
     const eventValues = {
       id: event.id,
       title: event.title,
       start: event.start,
       end: event.end,
       resourceId: event.resourceId,
-      description: event.description,
+      description: eventDbData?.description,
     };
-    console.log(eventValues);
 
     setNewEvent((oldEventValue) => eventValues);
+    form.resetFields();
     form.setFieldsValue({
       ...eventValues,
       start: dayjs(event.start),
@@ -266,24 +295,26 @@ export default function Resource() {
   };
 
   const handleSave = async (e: any) => {
-    console.log('handleOk', newEvent);
-    console.log(newEvent && 'id' in newEvent);
-    console.log(newEvent && typeof newEvent.id === 'number');
+    const formValues = form.getFieldsValue();
+    const eventValues = {
+      ...formValues,
+      start: formValues.start.toDate(),
+      end: formValues.end.toDate(),
+    };
+    console.log('handleSave', eventValues);
 
-    if (newEvent) {
-      if ('id' in newEvent && typeof newEvent.id === 'number') {
-        const updatedEvent = await updateEvent(newEvent.id, newEvent);
+    if (formValues) {
+      if ('id' in formValues && typeof formValues.id === 'number') {
+        const updatedEvent = await updateEvent(formValues.id, eventValues);
+        setEvents((oldevents) =>
+          oldevents.map((e) => (e.id === updatedEvent.id ? updatedEvent : e)),
+        );
         setNewEvent((oldEventValue) => updatedEvent);
-      } else if (!newEvent.id) {
-        const dbData = {
-          title: newEvent.title,
-          start: newEvent.start,
-          end: newEvent.end,
-          resourceId: newEvent.resourceId,
-          description: newEvent.description,
-        };
-
-        const newCreatedEvent = await createEvent(dbData);
+      } else if (!eventValues.id) {
+        const updatedEvents = events.filter((e) => e.id);
+        const newCreatedEvent = await createEvent(eventValues);
+        updatedEvents.splice(updatedEvents.length, 0, newCreatedEvent);
+        setEvents((oldevents) => updatedEvents);
         setNewEvent((oldEventValue) => newCreatedEvent);
       }
     }
@@ -292,27 +323,21 @@ export default function Resource() {
   };
   const handleDelete = async (e: any) => {
     console.log('handleDelete', newEvent);
-    // const newEvents = events.filter((e) =>
-    //   !newEvent
-    //     ? true
-    //     : newEvent.id && e.id && e.id.toString() !== newEvent.id.toString(),
-    // );
-
-    const newEvents = events.filter((e) => {
-      console.log('newEvent.id', newEvent ? newEvent.id : null);
-      console.log(
-        'e.id.toString()',
-        e.id && e.id.toString() ? e.id.toString() : null,
-      );
-      return !newEvent
-        ? true
-        : newEvent.id && e.id && e.id.toString() !== newEvent.id.toString();
-    });
 
     if (newEvent && newEvent.id && typeof newEvent.id === 'number') {
+      const newEvents = events.filter((e) => {
+        return (
+          newEvent.id && e.id && e.id.toString() !== newEvent.id.toString()
+        );
+      });
+
       await deleteEvent(newEvent.id);
+      setEvents((oldevents) => newEvents);
+    } else {
+      const newEvents = events.filter((e) => e.id);
+      setEvents((oldevents) => newEvents);
     }
-    setEvents((oldevents) => newEvents);
+
     setOpen(false);
   };
 
@@ -431,6 +456,12 @@ export default function Resource() {
                   showTime
                   format="YYYY-MM-DD HH:mm"
                   minuteStep={15}
+                  disabledDate={(current) => {
+                    const endDate = form.getFieldValue('end');
+                    return (
+                      endDate && current && current.isAfter(endDate, 'day')
+                    );
+                  }}
                   onChange={(date, dayteString) => {
                     const endDate = form.getFieldValue('end');
                     const id = form.getFieldValue('id');
@@ -449,6 +480,12 @@ export default function Resource() {
                   showTime
                   format="YYYY-MM-DD HH:mm"
                   minuteStep={15}
+                  disabledDate={(current) => {
+                    const startDate = form.getFieldValue('start');
+                    return (
+                      startDate && current && current.isBefore(startDate, 'day')
+                    );
+                  }}
                   onChange={(date, dayteString) => {
                     const startDate = form.getFieldValue('start');
                     const id = form.getFieldValue('id');
@@ -465,6 +502,13 @@ export default function Resource() {
               </Form.Item>
               <Form.Item noStyle name="resourceId">
                 <Input hidden />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="description" label="Description">
+                <Input.TextArea />
               </Form.Item>
             </Col>
           </Row>

@@ -21,3 +21,8 @@ export const deleteEvent = async (eventId: number) => {
   const newEvent = await EventService.deleteEvent(eventId);
   return newEvent;
 };
+
+export const getEventData = async (eventId: number) => {
+  const newEvent = await EventService.getEventById(eventId);
+  return newEvent;
+};
