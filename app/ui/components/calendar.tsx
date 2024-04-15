@@ -29,6 +29,8 @@ import {
   getEventData,
 } from '@/app/lib/actions';
 
+import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+
 const localizer = momentLocalizer(moment);
 
 const DnDCalendar = withDragAndDrop(Calendar);
@@ -87,6 +89,37 @@ const resourceMap1 = [
   { resourceId: 3, resourceTitle: 'Meeting room 1' },
   { resourceId: 4, resourceTitle: 'Meeting room 2' },
 ];
+
+const formItemLayout = {
+  labelCol: {
+    xs: {
+      span: 24,
+    },
+    sm: {
+      span: 4,
+    },
+  },
+  wrapperCol: {
+    xs: {
+      span: 24,
+    },
+    sm: {
+      span: 20,
+    },
+  },
+};
+const formItemLayoutWithOutLabel = {
+  wrapperCol: {
+    xs: {
+      span: 24,
+      offset: 0,
+    },
+    sm: {
+      span: 20,
+      offset: 0,
+    },
+  },
+};
 
 export default function Resource() {
   console.log('rendering');
@@ -506,8 +539,84 @@ export default function Resource() {
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={24}>
-              <Form.Item name="description" label="Description">
+            <Col span={18}>
+              <Form.List
+                name="emails"
+                rules={[
+                  {
+                    validator: async (_, names) => {
+                      if (!names || names.length < 2) {
+                        return Promise.reject(
+                          new Error('At least 1 attendee is required'),
+                        );
+                      }
+                    },
+                  },
+                ]}
+              >
+                {(fields, { add, remove }, { errors }) => (
+                  <>
+                    {fields.map((field, index) => (
+                      <Form.Item
+                        {...(index === 0
+                          ? formItemLayout
+                          : formItemLayoutWithOutLabel)}
+                        label={index === 0 ? 'Emails' : ''}
+                        required={false}
+                        key={field.key}
+                      >
+                        <Form.Item
+                          {...field}
+                          validateTrigger={['onChange', 'onBlur']}
+                          rules={[
+                            {
+                              type: 'email',
+                              message: 'The input is not a valid E-mail!',
+                            },
+                            {
+                              required: true,
+                              message: 'Please input your E-mail!',
+                            },
+                          ]}
+                          noStyle
+                        >
+                          <Input
+                            placeholder="attendees email"
+                            style={{
+                              width: '80%',
+                              marginRight: '10px',
+                            }}
+                          />
+                        </Form.Item>
+                        {fields.length > 1 ? (
+                          <MinusCircleOutlined
+                            className="dynamic-delete-button"
+                            onClick={() => remove(field.name)}
+                          />
+                        ) : null}
+                      </Form.Item>
+                    ))}
+                    <Form.Item>
+                      <Button
+                        type="dashed"
+                        onClick={() => add()}
+                        style={{
+                          width: '40%',
+                        }}
+                        icon={<PlusOutlined />}
+                      >
+                        Add Attendee
+                      </Button>
+                      <Form.ErrorList errors={errors} />
+                    </Form.Item>
+                  </>
+                )}
+              </Form.List>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={20}>
+              <Form.Item name="description" label="Notes">
                 <Input.TextArea />
               </Form.Item>
             </Col>

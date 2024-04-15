@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.3.6",
     "@babel/runtime": "^7.24.0",
     "@heroicons/react": "^2.0.18",
     "@prisma/client": "^5.11.0",
