@@ -29,7 +29,12 @@ import {
   getEventData,
 } from '@/app/lib/actions';
 
-import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  MinusCircleOutlined,
+  PlusOutlined,
+  InboxOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
 
 const localizer = momentLocalizer(moment);
 
@@ -47,6 +52,7 @@ import {
   Row,
   Col,
   TimePicker,
+  Upload,
 } from 'antd';
 
 import type { EventType } from '@/app/lib/definitions';
@@ -382,6 +388,14 @@ export default function Resource() {
     setOpen(false);
   };
 
+  const normFile = (e: any) => {
+    console.log('Upload event:', e);
+    if (Array.isArray(e)) {
+      return e;
+    }
+    return e?.fileList;
+  };
+
   /******* Form starts */
 
   const onFinish = (values: any) => {
@@ -556,62 +570,105 @@ export default function Resource() {
               >
                 {(fields, { add, remove }, { errors }) => (
                   <>
-                    {fields.map((field, index) => (
-                      <Form.Item
-                        {...(index === 0
-                          ? formItemLayout
-                          : formItemLayoutWithOutLabel)}
-                        label={index === 0 ? 'Emails' : ''}
-                        required={false}
-                        key={field.key}
-                      >
+                    {fields.map((field, index) => {
+                      return (
                         <Form.Item
-                          {...field}
-                          validateTrigger={['onChange', 'onBlur']}
-                          rules={[
-                            {
-                              type: 'email',
-                              message: 'The input is not a valid E-mail!',
-                            },
-                            {
-                              required: true,
-                              message: 'Please input your E-mail!',
-                            },
-                          ]}
-                          noStyle
+                          {...(index === 0
+                            ? formItemLayout
+                            : formItemLayoutWithOutLabel)}
+                          label={index === 0 ? 'Emails' : ''}
+                          required={false}
+                          key={field.key}
                         >
-                          <Input
-                            placeholder="attendees email"
-                            style={{
-                              width: '80%',
-                              marginRight: '10px',
-                            }}
-                          />
+                          <Form.Item
+                            {...field}
+                            key={field.key}
+                            name={field.name}
+                            fieldKey={field.fieldKey}
+                            validateTrigger={['onChange', 'onBlur']}
+                            rules={[
+                              {
+                                type: 'email',
+                                message: 'The input is not a valid E-mail!',
+                              },
+                              {
+                                required: true,
+                                message: 'Please input your E-mail!',
+                              },
+                            ]}
+                            noStyle
+                          >
+                            <Input
+                              placeholder="attendees email"
+                              style={{
+                                width: '80%',
+                                marginRight: '10px',
+                              }}
+                            />
+                          </Form.Item>
+                          {fields.length > 1 ? (
+                            <MinusCircleOutlined
+                              className="dynamic-delete-button"
+                              onClick={() => remove(field.name)}
+                            />
+                          ) : null}
                         </Form.Item>
-                        {fields.length > 1 ? (
-                          <MinusCircleOutlined
-                            className="dynamic-delete-button"
-                            onClick={() => remove(field.name)}
-                          />
-                        ) : null}
+                      );
+                    })}
+                    <Row>
+                      <Col span={24}>
+                        <Form.Item>
+                          <Button
+                            type="dashed"
+                            onClick={() => add()}
+                            style={{
+                              width: '40%',
+                            }}
+                            icon={<PlusOutlined />}
+                          >
+                            Add Attendee
+                          </Button>
+
+                          <Form.ErrorList errors={errors} />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                    <Row>
+                      <Form.Item name="sendEmail" valuePropName="checked">
+                        <Checkbox>Send Email to attendees</Checkbox>
                       </Form.Item>
-                    ))}
-                    <Form.Item>
-                      <Button
-                        type="dashed"
-                        onClick={() => add()}
-                        style={{
-                          width: '40%',
-                        }}
-                        icon={<PlusOutlined />}
-                      >
-                        Add Attendee
-                      </Button>
-                      <Form.ErrorList errors={errors} />
-                    </Form.Item>
+                    </Row>
                   </>
                 )}
               </Form.List>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col>
+              <Form.Item label="Events Media">
+                <Form.Item
+                  name="photos"
+                  valuePropName="fileList"
+                  getValueFromEvent={normFile}
+                  noStyle
+                >
+                  <Upload.Dragger
+                    name="files"
+                    // action="/upload.do"
+                    beforeUpload={() => false}
+                  >
+                    <p className="ant-upload-drag-icon">
+                      <InboxOutlined />
+                    </p>
+                    <p className="ant-upload-text">
+                      Click or drag file to this area to upload
+                    </p>
+                    <p className="ant-upload-hint">
+                      Support for a single or bulk upload.
+                    </p>
+                  </Upload.Dragger>
+                </Form.Item>
+              </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
