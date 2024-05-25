@@ -31,9 +31,9 @@ model Event {
 
 
 model Resource {
-  resourceId        Int     @id @default(autoincrement())
+  resourceId         Int     @id @default(autoincrement())
   resourceTitle      String
-  events    Event[]  @relation("ResourceToEvent")
+  events             Event[]  @relation("ResourceToEvent")
 
 }
 
